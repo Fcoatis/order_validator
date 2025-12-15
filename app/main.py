@@ -1,6 +1,9 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import List
 
 
+# --- Modelos de Domínio ---
 @dataclass
 class Item:
     name: str
@@ -13,8 +16,8 @@ class Order:
     has_discount: bool
     region: str
     currency: str
-    type: str  # e.g. "bulk" or "normal"
-    items: list[Item] = field(default_factory=list)
+    type: str
+    items: List[Item] = field(default_factory=list)
 
 
 @dataclass
@@ -25,60 +28,130 @@ class User:
     region: str
 
 
+# --- Specification Pattern (O Motor de Regras) ---
+
+class Specification(ABC):
+    """Classe base para todas as regras de negócio."""
+
+    @abstractmethod
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        pass
+
+    def __and__(self, other):
+        return AndSpecification(self, other)
+
+    def __or__(self, other):
+        return OrSpecification(self, other)
+
+    def __invert__(self):
+        return NotSpecification(self)
+
+
+class AndSpecification(Specification):
+    def __init__(self, spec1: Specification, spec2: Specification):
+        self.spec1 = spec1
+        self.spec2 = spec2
+
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return self.spec1.is_satisfied_by(order, user) and \
+               self.spec2.is_satisfied_by(order, user)
+
+
+class OrSpecification(Specification):
+    def __init__(self, spec1: Specification, spec2: Specification):
+        self.spec1 = spec1
+        self.spec2 = spec2
+
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return self.spec1.is_satisfied_by(order, user) or \
+               self.spec2.is_satisfied_by(order, user)
+
+
+class NotSpecification(Specification):
+    def __init__(self, spec: Specification):
+        self.spec = spec
+
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return not self.spec.is_satisfied_by(order, user)
+
+
+# --- Regras de Negócio Atômicas (Os Blocos de Lego) ---
+
+class IsUserPremium(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return user.is_premium
+
+class IsUserAdmin(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return user.is_admin
+
+class IsHighValueOrder(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return order.amount > 1000
+
+class HasNoDiscount(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        return not order.has_discount
+
+class IsValidBulkOrder(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        # Regra: Bulk é válido se usuário NÃO for trial
+        is_bulk = (order.type == "bulk")
+        is_not_trial = (not user.is_trial)
+        return is_bulk and is_not_trial
+
+class IsEuCompliant(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        # Regra: Se usuário é EU, moeda DEVE ser EUR
+        if user.region == "EU":
+            return order.currency == "EUR"
+        return False
+
+class IsNonEuCompliant(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        # Regra: Se NÃO é EU, checar sanidade dos itens
+        if user.region != "EU":
+            for item in order.items:
+                if item.price < 0:
+                    return False
+            return True
+        return False
+
+
+# --- O Orquestrador ---
+
 def approve_order(order: Order, user: User) -> str:
     """
-    Função principal: Agora atua apenas como um 'Orquestrador'.
-    Ela delega a decisão para funções especialistas.
+    A função agora apenas define a POLÍTICA combinando as regras.
+    Lê-se quase como inglês.
     """
     try:
-        if not user.is_premium:
-            return _check_non_premium_rules(user)
+        # 1. Definição das Regras Complexas
 
-        if order.amount <= 1000:
-            return _check_low_value_rules(order, user)
+        # Cenário Admin: Se não for premium, tem que ser admin
+        non_premium_policy = (~IsUserPremium() & IsUserAdmin())
 
-        return _check_high_value_rules(order, user)
+        # Cenário Baixo Valor: Se for premium e <= 1000, tem que ser Bulk Válido
+        low_value_policy = (IsUserPremium() & ~IsHighValueOrder() & IsValidBulkOrder())
+
+        # Cenário Alto Valor: Premium + >1000 + Sem Desconto + (Compliance EU OU Compliance Mundo)
+        high_value_compliance = (IsEuCompliant() | IsNonEuCompliant())
+
+        high_value_policy = (
+            IsUserPremium() &
+            IsHighValueOrder() &
+            HasNoDiscount() &
+            high_value_compliance
+        )
+
+        # 2. Política Final: Aprovar se atender QUALQUER um dos 3 cenários
+        final_policy = non_premium_policy | low_value_policy | high_value_policy
+
+        # 3. Execução
+        if final_policy.is_satisfied_by(order, user):
+            return "approved"
+
+        return "rejected"
 
     except Exception:
         return "rejected"
-
-
-# --- Funções Especialistas (Helpers Privados) ---
-
-def _check_non_premium_rules(user: User) -> str:
-    # Regra: Se não paga, só aprova se for Admin
-    if user.is_admin:
-        return "approved"
-    return "rejected"
-
-
-def _check_low_value_rules(order: Order, user: User) -> str:
-    # Regra: Pedidos pequenos (<= 1000)
-    # Só aprova atacado (bulk) se não for conta de teste (trial)
-    if order.type == "bulk" and not user.is_trial:
-        return "approved"
-    return "rejected"
-
-
-def _check_high_value_rules(order: Order, user: User) -> str:
-    # Regra: Pedidos grandes (> 1000)
-
-    # 1. Proibido desconto em valores altos
-    if order.has_discount:
-        return "rejected"
-
-    # 2. Compliance Europa
-    if user.region == "EU":
-        if order.currency == "EUR":
-            return "approved"
-        return "rejected"
-
-    # 3. Validação de Itens (Resto do Mundo)
-    return _validate_items_integrity(order.items)
-
-
-def _validate_items_integrity(items: list[Item]) -> str:
-    for item in items:
-        if item.price < 0:
-            return "rejected"
-    return "approved"
