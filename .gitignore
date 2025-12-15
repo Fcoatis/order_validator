@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Pytest e Cobertura de Código (Essencial)
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Configurações do VS Code (Recomendado para não subir suas configs locais)
+.vscode/
+
+# Arquivos de sistema (Lixo de SO)
+.DS_Store
+Thumbs.db
