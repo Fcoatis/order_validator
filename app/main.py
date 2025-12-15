@@ -26,33 +26,43 @@ class User:
 
 
 def approve_order(order: Order, user: User) -> str:
-    """A tangled, messy function that we’ll clean up in the video."""
+    """
+    Refatoração 1: Guard Clauses (Achatamento da Lógica)
+    """
     try:
-        if user.is_premium:
-            if order.amount > 1000:
-                if not order.has_discount:
-                    if user.region != "EU":
-                        for item in order.items:
-                            if item.price < 0:
-                                return "rejected"
-                        return "approved"
-                    else:
-                        if order.currency == "EUR":
-                            return "approved"
-                        else:
-                            return "rejected"
-                else:
-                    return "rejected"
-            else:
-                if order.type == "bulk" and not user.is_trial:
-                    return "approved"
-                else:
-                    return "rejected"
-        else:
+        # 1. Regra para NÃO Premium (Simples e Direta)
+        if not user.is_premium:
             if user.is_admin:
                 return "approved"
-            else:
-                return "rejected"
+            return "rejected"
+
+        # --- Daqui para baixo, sabemos que o usuário É Premium ---
+
+        # 2. Regra para Pedidos de Baixo Valor (<= 1000)
+        if order.amount <= 1000:
+            if order.type == "bulk" and not user.is_trial:
+                return "approved"
+            return "rejected"
+
+        # --- Daqui para baixo, sabemos que é Premium E Alto Valor (> 1000) ---
+
+        # 3. Descontos em Alto Valor são proibidos
+        if order.has_discount:
+            return "rejected"
+
+        # 4. Regras Regionais (Geográficas)
+        if user.region == "EU":
+            # Compliance Europa
+            if order.currency == "EUR":
+                return "approved"
+            return "rejected"
+        else:
+            # Regras Globais (Fora da UE): Validação de Sanidade dos Itens
+            for item in order.items:
+                if item.price < 0:
+                    return "rejected"
+            return "approved"
+
     except Exception:
-        # Just to be safe
+        # Resiliência: Qualquer erro de dados rejeita o pedido
         return "rejected"
