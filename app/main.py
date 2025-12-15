@@ -1,7 +1,8 @@
 from app.models import Order, User
 from app.rules import (
     IsUserPremium, IsUserAdmin, IsHighValueOrder,
-    HasNoDiscount, IsValidBulkOrder, IsEuCompliant, IsNonEuCompliant
+    HasNoDiscount, IsValidBulkOrder, IsEuCompliant, IsNonEuCompliant,
+    IsCryptoSafe
 )
 
 def approve_order(order: Order, user: User) -> str:
@@ -19,7 +20,12 @@ def approve_order(order: Order, user: User) -> str:
             high_value_compliance
         )
 
-        final_policy = non_premium_policy | low_value_policy | high_value_policy
+
+        # Regra base de aprovação (qualquer uma das políticas positivas)
+        base_approval = non_premium_policy | low_value_policy | high_value_policy
+
+        # A Política Final é: Deve ter aprovação base E ser seguro para Cripto
+        final_policy = base_approval & IsCryptoSafe()
 
         if final_policy.is_satisfied_by(order, user):
             return "approved"

@@ -76,6 +76,20 @@ def create_negative_items():
             {"amount": 900, "has_discount": False, "region": "US", "currency": "USD", "type": "normal", "items": []},
             "rejected"
         ),
+
+        # --- NOVOS CENÁRIOS: Regra de Proteção Crypto (BTC) ---
+        (
+            "Crypto Rule: Non-Premium user tries huge BTC order -> Rejected",
+            {"is_premium": False, "is_admin": False, "is_trial": False, "region": "US"},
+            {"amount": 2500, "has_discount": False, "region": "US", "currency": "BTC", "type": "normal", "items": []},
+            "rejected"
+        ),
+        (
+            "Crypto Rule: Premium user tries huge BTC order -> Approved",
+            {"is_premium": True, "is_admin": False, "is_trial": False, "region": "US"},
+            {"amount": 2500, "has_discount": False, "region": "US", "currency": "BTC", "type": "normal", "items": []},
+            "approved"
+        ),
     ]
 )
 def test_approve_order_scenarios(case_description, user_kwargs, order_kwargs, expected_result):

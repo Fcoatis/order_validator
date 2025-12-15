@@ -89,3 +89,16 @@ class IsNonEuCompliant(Specification):
                     return False
             return True
         return False
+
+class IsCryptoSafe(Specification):
+    def is_satisfied_by(self, order: Order, user: User) -> bool:
+        # Se não é BTC, a regra não se aplica (é seguro sob esta ótica)
+        if order.currency != "BTC":
+            return True
+
+        # Se é BTC mas valor é baixo, também é seguro
+        if order.amount <= 2000:
+            return True
+
+        # Se é BTC E Alto Valor, só é seguro se for Premium
+        return user.is_premium
