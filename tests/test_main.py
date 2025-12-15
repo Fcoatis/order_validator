@@ -1,5 +1,6 @@
 import pytest
-from app.main import Item, Order, User, approve_order
+from app.models import Item, Order, User
+from app.main import approve_order
 
 # --- Auxiliares para os dados de teste ---
 def create_standard_items():
