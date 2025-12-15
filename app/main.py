@@ -27,42 +27,58 @@ class User:
 
 def approve_order(order: Order, user: User) -> str:
     """
-    Refatoração 1: Guard Clauses (Achatamento da Lógica)
+    Função principal: Agora atua apenas como um 'Orquestrador'.
+    Ela delega a decisão para funções especialistas.
     """
     try:
-        # 1. Regra para NÃO Premium (Simples e Direta)
         if not user.is_premium:
-            if user.is_admin:
-                return "approved"
-            return "rejected"
+            return _check_non_premium_rules(user)
 
-        # --- Daqui para baixo, sabemos que o usuário É Premium ---
-
-        # 2. Regra para Pedidos de Baixo Valor (<= 1000)
         if order.amount <= 1000:
-            if order.type == "bulk" and not user.is_trial:
-                return "approved"
-            return "rejected"
+            return _check_low_value_rules(order, user)
 
-        # --- Daqui para baixo, sabemos que é Premium E Alto Valor (> 1000) ---
-
-        # 3. Descontos em Alto Valor são proibidos
-        if order.has_discount:
-            return "rejected"
-
-        # 4. Regras Regionais (Geográficas)
-        if user.region == "EU":
-            # Compliance Europa
-            if order.currency == "EUR":
-                return "approved"
-            return "rejected"
-        else:
-            # Regras Globais (Fora da UE): Validação de Sanidade dos Itens
-            for item in order.items:
-                if item.price < 0:
-                    return "rejected"
-            return "approved"
+        return _check_high_value_rules(order, user)
 
     except Exception:
-        # Resiliência: Qualquer erro de dados rejeita o pedido
         return "rejected"
+
+
+# --- Funções Especialistas (Helpers Privados) ---
+
+def _check_non_premium_rules(user: User) -> str:
+    # Regra: Se não paga, só aprova se for Admin
+    if user.is_admin:
+        return "approved"
+    return "rejected"
+
+
+def _check_low_value_rules(order: Order, user: User) -> str:
+    # Regra: Pedidos pequenos (<= 1000)
+    # Só aprova atacado (bulk) se não for conta de teste (trial)
+    if order.type == "bulk" and not user.is_trial:
+        return "approved"
+    return "rejected"
+
+
+def _check_high_value_rules(order: Order, user: User) -> str:
+    # Regra: Pedidos grandes (> 1000)
+
+    # 1. Proibido desconto em valores altos
+    if order.has_discount:
+        return "rejected"
+
+    # 2. Compliance Europa
+    if user.region == "EU":
+        if order.currency == "EUR":
+            return "approved"
+        return "rejected"
+
+    # 3. Validação de Itens (Resto do Mundo)
+    return _validate_items_integrity(order.items)
+
+
+def _validate_items_integrity(items: list[Item]) -> str:
+    for item in items:
+        if item.price < 0:
+            return "rejected"
+    return "approved"
