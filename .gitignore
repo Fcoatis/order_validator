@@ -20,4 +20,5 @@ coverage.xml
 
 # Arquivos de sistema (Lixo de SO)
 .DS_Store
-Thumbs.db.hypothesis/
+Thumbs.db
+.hypothesis/
